@@ -22,8 +22,6 @@ class Chat
     private static $table_chat_messages = 'digitalta_chat_messages';
     private static $table_chat_users = 'digitalta_chat_users';
 
-    private static $table_chat_read_status = 'digitalta_chat_read_status';
-
 
     /**
      * Create a chat room
@@ -99,7 +97,7 @@ class Chat
     public static function get_chat_users($chat_room_id): array
     {
         global $DB;
-        return $DB->get_records(self::$table_chat_users, array('chatid' => $chat_room_id));
+        return $DB->get_records(self::$table_chat_users, array('chat_room_id' => $chat_room_id));
     }
 
     /**
@@ -239,32 +237,22 @@ class Chat
         }
 
         $sql = "SELECT
-        cr.*, MAX(cm.timecreated) as last_message_time
+        *
         FROM
              {digitalta_chat_users}  cu
         INNER JOIN  {digitalta_chat}  cr
         ON
             cu.chatid = cr.id
-        LEFT JOIN {digitalta_chat_messages} cm
-        ON cr.id = cm.chatid
         WHERE
-            cu.userid = ?
-        ";
+            cu.userid = ?";
 
         if ($experienceid) {
-            $sql .= " AND cr.experienceid = ? ";
+            $sql .= " AND cr.experienceid = ? LIMIT 1";
         }
 
-        $sql .= "GROUP BY cr.id ORDER BY last_message_time DESC";
 
-        $params = [$userid];
-        if ($experienceid) {
-            $params[] = $experienceid;
-        }
-
-        $chat_rooms = array_values($DB->get_records_sql($sql, $params));
-        $chat_rooms = self::set_chat_names($chat_rooms, $userid);
-        $chat_rooms = self::set_unread_messages($chat_rooms, $userid);
+        $chat_rooms = array_values($DB->get_records_sql($sql, array($userid, $experienceid)));
+        $chat_rooms = self::set_chat_names($chat_rooms);
 
         return $chat_rooms;
     }
@@ -272,11 +260,9 @@ class Chat
     /**
      * Set chat names
      */
-    public static function set_chat_names($chat_rooms, $userid = null): array
+    public static function set_chat_names($chat_rooms): array
     {
-        global $DB, $PAGE;
-
-        $PAGE->set_context(\context_system::instance());
+        global $DB;
         $chat_rooms_with_names = [];
         foreach ($chat_rooms as $chat_room) {
 
@@ -295,7 +281,6 @@ class Chat
             if ($chat_room->experienceid) {
                 $experience = $DB->get_record('digitalta_experiences', array('id' => $chat_room->experienceid));
                 $chat_room->name = $experience->title;
-                $chat_room->ownexperience = $experience->userid == $userid;
             }
             $chat_rooms_with_names[] = $chat_room;
         }
@@ -353,7 +338,7 @@ class Chat
         }
     }
 
-    public static function get_unread_chatrooms($userid = null)
+  public static function get_unread_chatrooms($userid = null)
     {
         global $DB, $USER;
 
